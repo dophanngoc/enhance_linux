@@ -1,0 +1,186 @@
+#! /usr/bin/env bash
+
+# Terminate on any error
+set -e
+
+# Ask for sudo password if not sudo privileges
+if [[ "$EUID" = 0 ]]; then
+    echo "Already root"
+else
+    sudo -k # make sure to ask for password on next sudo
+    if sudo true; then
+        echo "Correct password"
+    else
+        echo "Wrong password"
+        exit 1
+    fi
+fi
+
+echo -e "Update system and manage package? If yes, type 'y', otherwise 'n':\e[32m"
+read updatepackage
+echo -e "Reconfigure umcomplicated firewall? If yes, type 'y', otherwise 'n':\e[32m"
+read reconfigufw
+echo -e "Replace wicd? If yes, type 'y', otherwise 'n':\e[32m"
+read enablewicd
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Cleanup old kernels \n\e[32m"
+
+sudo dpkg -l linux-{image,headers}-* | awk '/^ii/{print $2}' | egrep '[0-9]+\.[0-9]+\.[0-9]+' | grep -v $(uname -r) | xargs sudo apt-get -y purge
+
+
+if [[ $updatepackage == y ]]; then
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> Update... Upgrade... \n\e[32m"
+    sudo apt update
+    sudo apt upgrade -y
+
+
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> Install/remove packages \n\e[32m"
+    sudo apt autoremove
+    sudo apt remove --purge firefox
+    sudo apt install falkon
+    sudo apt install -y iftop htop nethogs
+    sudo apt install macchanger
+    sudo apt install -y net-tools git wget
+    sudo apt remove --purge yelp tracker
+    echo -e "### Removing snap"
+    sudo apt autoremove --purge snapd gnome-software-plugin-snap
+    rm -fr ~/snap
+    sudo apt-mark hold snapd
+    sudo apt install libpam-tmpdir
+    sudo apt remove -y whoopsie apport apport-gtk ubuntu-report
+fi
+
+if [[ $enablewicd == y ]]; then
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> replace networkmanager with wicd \n\e[32m"
+    sudo mkdir -p wicd
+    cd wicd
+    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/p/pygtk/python-gtk2_2.24.0-6_amd64.deb
+    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/p/pygtk/python-glade2_2.24.0-6_amd64.deb
+    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/python-wicd_1.7.4+tb2-6_all.deb
+    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/wicd-daemon_1.7.4+tb2-6_all.deb
+    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/wicd-gtk_1.7.4+tb2-6_all.deb
+
+    sudo apt-get install ./*.deb
+    sudo apt-get install ./*.deb
+    sudo apt-get remove network-manager-gnome network-manager
+    cd ..
+    sudo rm -r wicd
+fi
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Show *all* apps in list of startup items\n\e[32m"
+
+sudo sed -i 's/NoDisplay=true/NoDisplay=false/g' /etc/xdg/autostart/*.desktop
+echo "Done."
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Disable Bluethooth\n\e[32m"
+
+sudo systemctl disable bluetooth
+sudo modprobe -r btusb
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Don't send usage statistics to Canonical \n\e[32m"
+
+dconf write /org/gnome/desktop/privacy/send-software-usage-stats false
+dconf write /org/gnome/desktop/privacy/report-technical-problem false
+echo "Done."
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Finally cleanup packages \n\e[32m"
+
+sudo apt autoclean autoremove
+
+if [[ $reconfigufw == y ]]; then
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> Firewall configuration \n\e[32m"
+    sudo apt install ufw
+    sudo ufw enable
+    sudo ufw default deny incoming
+    sudo ufw default deny outgoing
+    sudo ufw allow out to any port 443
+    sudo ufw allow out to any port 80
+    sudo ufw allow out to any port 53
+    sudo ufw reload
+    sudo ufw status verbose
+
+    for (( i=0; i <= 255; i++ )); do
+       sudo ufw insert 1 deny from 52.69.$i.0/24
+    done
+    for (( i=0; i <= 255; i++ )); do
+       sudo ufw insert 1 deny from 172.217.$i.0/24
+    done
+    for (( i=0; i <= 255; i++ )); do
+       sudo ufw insert 1 deny from 35.244.$i.0/24
+    done
+    sudo ufw reload
+fi
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Configure local DNS server | blocking sites... \n\e[32m"
+sudo cp /etc/hosts /etc/hosts.backup
+sudo cp etc/hosts /etc/hosts
+echo -e "\n127.0.0.1\t$(hostname)" | sudo tee -a /etc/hosts
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Disable ipv6 \n\e[32m"
+
+sudo sed -i '/GRUB_CMDLINE_LINUX_DEFAULT=/c\GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ipv6.disable=1"' /etc/default/grub 
+sudo sed -i '/GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX="ipv6.disable=1"' /etc/default/grub
+
+cat /etc/default/grub | grep GRUB_CMDLINE_LINUX
+
+if grep -c "net.ipv6.conf.all.disable_ipv6" /etc/sysctl.conf >> /dev/null; then
+    sudo sed -i '/net.ipv6.conf.all.disable_ipv6/c\net.ipv6.conf.all.disable_ipv6=1' /etc/sysctl.conf
+else
+    echo "net.ipv6.conf.all.disable_ipv6=1" | sudo tee -a /etc/sysctl.conf
+fi
+
+if grep -c "net.ipv6.conf.default.disable_ipv6" /etc/sysctl.conf >> /dev/null; then
+    sudo sed -i '/net.ipv6.conf.default.disable_ipv6/c\net.ipv6.conf.default.disable_ipv6=1' /etc/sysctl.conf
+else
+    echo "net.ipv6.conf.default.disable_ipv6=1" | sudo tee -a /etc/sysctl.conf
+fi
+
+sudo sysctl --load /etc/sysctl.conf
+
+echo -e "configure other network kernel parameters\n"
+sudo /bin/su -c "grep -qxF -- 'net.ipv4.tcp_syncookies=1' /etc/sysctl.conf || echo 'net.ipv4.tcp_syncookies=1' >> /etc/sysctl.conf"
+sudo /bin/su -c "grep -qxF -- 'net.ipv4.conf.all.accept_redirects = 0' /etc/sysctl.conf || echo 'net.ipv4.conf.all.accept_redirects=0' >> /etc/sysctl.conf"
+sudo /bin/su -c "grep -qxF -- 'net.ipv4.conf.default.accept_redirects=0' /etc/sysctl.conf || echo 'net.ipv4.conf.default.accept_redirects=0' >> /etc/sysctl.conf"
+sudo /bin/su -c "grep -qxF -- 'net.ipv4.conf.all.send_redirects=0' /etc/sysctl.conf || echo 'net.ipv4.conf.all.send_redirects=0' >> /etc/sysctl.conf"
+sudo /bin/su -c "grep -qxF -- 'net.ipv4.conf.default.send_redirects=0' /etc/sysctl.conf || echo 'net.ipv4.conf.default.send_redirects=0' >> /etc/sysctl.conf"
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Run random mac at boot \n\e[32m"
+sudo bash systemd/run.sh
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Default DNS server \n\e[32m"
+
+sudo apt install dnsmasq resolvconf
+sudo dnsmasq --test
+sudo /bin/su -c "grep -qxF -- 'name_servers="127.0.0.1"' /etc/resolvconf.conf || echo 'name_servers="127.0.0.1"' >> /etc/resolvconf.conf"
+sudo /bin/su -c "grep -qxF -- 'resolv_conf_options="trust-ad"' /etc/resolvconf.conf || echo 'resolv_conf_options="trust-ad"' >> /etc/resolvconf.conf"
+sudo /bin/su -c "grep -qxF -- 'dnsmasq_conf=/etc/dnsmasq-conf.conf' /etc/resolvconf.conf || echo 'dnsmasq_conf=/etc/dnsmasq-conf.conf' >> /etc/resolvconf.conf"
+sudo /bin/su -c "grep -qxF -- 'dnsmasq_resolv=/etc/dnsmasq-resolv.conf' /etc/resolvconf.conf || echo 'dnsmasq_resolv=/etc/dnsmasq-resolv.conf' >> /etc/resolvconf.conf"
+sudo resolvconf -u
+sudo /bin/su -c "grep -qxF -- 'nameserver 127.0.0.1' /etc/resolv.conf || echo 'nameserver 127.0.0.1' >> /etc/resolv.conf"
+sudo /bin/su -c "grep -qxF -- 'options trust-ad' /etc/resolv.conf || echo 'options trust-ad' >> /etc/resolv.conf"
+
+sudo /bin/su -c "grep -qxF -- 'server=1.1.1.1' /etc/dnsmasq.conf || echo 'server=1.1.1.1' >> /etc/dnsmasq.conf"
+sudo /bin/su -c "grep -qxF -- 'server=1.0.0.1' /etc/dnsmasq.conf || echo 'server=1.0.0.1' >> /etc/dnsmasq.conf"
+
+echo -e "\e[0m\n\nAll done without errors.\n"
+
+# Ask for configurations
+echo -e "You must reboot for all changes to take effect. Would you like to reboot? If yes, type 'y', otherwise 'n':\e[32m"
+read usersettingreboot
+
+if [[ $usersettingreboot == y ]]; then
+   sudo reboot
+fi
+
