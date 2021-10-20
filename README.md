@@ -6,14 +6,14 @@
 *Ubuntu*
 
 ```
-git clone https://github.com/dophanngoc/optimize-sec-ub.git
+git clone https://github.com/dophanngoc/enhance_linux.git
 sudo bash optimize
 ```
 
 *CentOS*
 
 ```
-git clone https://github.com/dophanngoc/optimize-sec-ub.git
+git clone https://github.com/dophanngoc/enhance_linux.git
 git checkout centos
 sudo bash optimize
 ```
@@ -30,7 +30,7 @@ Run `sudo bash optimize`
 
 `sudo iftop -i <if-name>`
 
-- Monitor traffice per app
+- Monitor traffic per app
 
 `sudo nethogs <if-name>`
  
