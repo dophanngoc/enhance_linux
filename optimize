@@ -109,22 +109,22 @@ if [[ $reconfigufw == y ]]; then
 
     for (( i=0; i <= 255; i++ )); do
        sudo ufw insert 1 deny from 52.69.$i.0/24
-       echo "denied 52.69.$(i).0/24"
+       echo "denied 52.69.${i}.0/24"
        sudo ufw insert 1 deny from 172.217.$i.0/24
-       echo "denied 172.217.$(i).0/24"
+       echo "denied 172.217.${i}.0/24"
        sudo ufw insert 1 deny from 35.244.$i.0/24
-       echo "denied 35.244.$(i).0/24"
+       echo "denied 35.244.${i}.0/24"
     done
 
     for (( i=0; i <= 255; i++ )); do
        sudo ufw insert 1 deny from 13.112.$i.0/24
-       echo "denied 13.112.$(i).0/24"
+       echo "denied 13.112.${i}.0/24"
        sudo ufw insert 1 deny from 13.113.$i.0/24
-       echo "denied 13.113.$(i).0/24"
+       echo "denied 13.113.${i}.0/24"
        sudo ufw insert 1 deny from 13.114.$i.0/24
-       echo "denied 13.114.$(i).0/24"
+       echo "denied 13.114.${i}.0/24"
        sudo ufw insert 1 deny from 13.115.$i.0/24
-       echo "denied 13.115.$(i).0/24"
+       echo "denied 13.115.${i}.0/24"
     done
     sudo ufw reload
 fi
