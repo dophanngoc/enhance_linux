@@ -16,24 +16,32 @@ else
     fi
 fi
 
+OS_check=$(cat /etc/os-release | grep "^ID=" | cut -d "=" -f 2 | sed 's/"//g')
+if [[ "$OS_check" == "ubuntu"* ]]; then
+    echo -e "OS type: Ubuntu Platform\n"
+elif [[ "$OS_check" == "centos"* ]]; then
+    echo -e "OS type: Centos Platform\n"
+    echo -e "Running script...\n"
+    sudo bash modules/run_centos
+else
+    echo -e "Unsupported System\n"
+    exit 1
+fi
+
 echo -e "Update system and manage package? If yes, type 'y', otherwise 'n':\e[32m"
 read updatepackage
 echo -e "Reconfigure umcomplicated firewall? If yes, type 'y', otherwise 'n':\e[32m"
 read reconfigufw
-echo -e "Replace wicd? If yes, type 'y', otherwise 'n':\e[32m"
-read enablewicd
 echo -e "\e[0m\n\n**************************************************"
 echo -e "----> Cleanup old kernels \n\e[32m"
 
 sudo dpkg -l linux-{image,headers}-* | awk '/^ii/{print $2}' | egrep '[0-9]+\.[0-9]+\.[0-9]+' | grep -v $(uname -r) | xargs sudo apt-get -y purge
-
 
 if [[ $updatepackage == y ]]; then
     echo -e "\e[0m\n\n**************************************************"
     echo -e "----> Update... Upgrade... \n\e[32m"
     sudo apt update
     sudo apt upgrade -y
-
 
     echo -e "\e[0m\n\n**************************************************"
     echo -e "----> Install/remove packages \n\e[32m"
@@ -50,24 +58,6 @@ if [[ $updatepackage == y ]]; then
     sudo apt-mark hold snapd
     sudo apt install libpam-tmpdir
     sudo apt remove -y whoopsie apport apport-gtk ubuntu-report
-fi
-
-if [[ $enablewicd == y ]]; then
-    echo -e "\e[0m\n\n**************************************************"
-    echo -e "----> replace networkmanager with wicd \n\e[32m"
-    sudo mkdir -p wicd
-    cd wicd
-    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/p/pygtk/python-gtk2_2.24.0-6_amd64.deb
-    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/p/pygtk/python-glade2_2.24.0-6_amd64.deb
-    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/python-wicd_1.7.4+tb2-6_all.deb
-    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/wicd-daemon_1.7.4+tb2-6_all.deb
-    wget http://old-releases.ubuntu.com/ubuntu/pool/universe/w/wicd/wicd-gtk_1.7.4+tb2-6_all.deb
-
-    sudo apt-get install ./*.deb
-    sudo apt-get install ./*.deb
-    sudo apt-get remove network-manager-gnome network-manager
-    cd ..
-    sudo rm -r wicd
 fi
 
 echo -e "\e[0m\n\n**************************************************"

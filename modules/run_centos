@@ -1,0 +1,100 @@
+#! /usr/bin/env bash
+
+set -e
+if [[ "$EUID" != 0 ]]; then
+    echo "Unexpected! Please run with sudoer or root."
+    exit 1
+fi
+
+echo -e "Update system and manage package? If yes, type 'y', otherwise 'n':\e[32m"
+read updatepackage
+echo -e "Reconfigure umcomplicated firewall? If yes, type 'y', otherwise 'n':\e[32m"
+read reconfigufw
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Disable gnome-software running background \n\e[32m"
+sudo gsettings set org.gnome.software download-updates false
+sudo systemctl mask packagekit.service
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Disable ipv6 \n\e[32m"
+
+if grep -c "net.ipv6.conf.all.disable_ipv6" /etc/sysctl.conf >> /dev/null; then
+    sudo sed -i '/net.ipv6.conf.all.disable_ipv6/c\net.ipv6.conf.all.disable_ipv6=1' /etc/sysctl.conf
+else
+    echo "net.ipv6.conf.all.disable_ipv6=1" | sudo tee -a /etc/sysctl.conf
+fi
+
+if grep -c "net.ipv6.conf.default.disable_ipv6" /etc/sysctl.conf >> /dev/null; then
+    sudo sed -i '/net.ipv6.conf.default.disable_ipv6/c\net.ipv6.conf.default.disable_ipv6=1' /etc/sysctl.conf
+else
+    echo "net.ipv6.conf.default.disable_ipv6=1" | sudo tee -a /etc/sysctl.conf
+fi
+
+sudo sysctl --load /etc/sysctl.conf
+
+ifname_list=$(ip -o link show | awk -F': ' '{print $2}' | sed '/lo/'d)
+while IFS= read -r line
+do
+    sudo nmcli connection modify $ifname_used ipv6.method ignore
+done <<< $ifname_list
+
+echo -e "Install Random mac address service\n"
+sudo bash ../systemd/run.sh
+
+if [[ $updatepackage == y ]]; then
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> Install packages \n\e[32m"
+    sudo yum install epel-release
+    sudo yum install iftop nethogs
+    sudo yum install ufw openvpn NetworkManager-openvpn NetworkManager-openvpn-gnome
+    sudo yum install konqueror
+    sudo yum remove epel-release
+fi
+if [[ $reconfigufw == y ]]; then
+    echo -e "\e[0m\n\n**************************************************"
+    echo -e "----> Firewall configuration \n\e[32m"
+    sudo ufw enable
+    sudo ufw default deny incoming
+    sudo ufw default deny outgoing
+    sudo ufw allow out to any port 443
+    sudo ufw allow out to any port 80
+    sudo ufw allow out to any port 53
+    sudo ufw status verbose
+
+    for (( i=0; i <= 255; i++ )); do
+       sudo ufw insert 1 deny from 52.69.$i.0/24
+       echo "denied 52.69.${i}.0/24"
+       sudo ufw insert 1 deny from 172.217.$i.0/24
+       echo "denied 172.217.${i}.0/24"
+       sudo ufw insert 1 deny from 35.244.$i.0/24
+       echo "denied 35.244.${i}.0/24"
+    done
+
+    for (( i=0; i <= 255; i++ )); do
+       sudo ufw insert 1 deny from 13.112.$i.0/24
+       echo "denied 13.112.${i}.0/24"
+       sudo ufw insert 1 deny from 13.113.$i.0/24
+       echo "denied 13.113.${i}.0/24"
+       sudo ufw insert 1 deny from 13.114.$i.0/24
+       echo "denied 13.114.${i}.0/24"
+       sudo ufw insert 1 deny from 13.115.$i.0/24
+       echo "denied 13.115.${i}.0/24"
+    done
+
+    sudo ufw reload
+    sudo systemctl enable ufw
+fi
+
+echo -e "\e[0m\n\n**************************************************"
+echo -e "----> Disable unexpected update \n\e[32m"
+sudo echo "includepkgs=kernel*" >> /etc/yum.conf
+echo -e "Uncomment #includepkgs=kernel* AT /etc/yum.conf to enable install/update application\n"
+# Ask for configurations
+echo -e "Would you like to reboot? If yes, type 'y', otherwise 'n':\e[32m"
+read usersettingreboot
+
+if [[ $usersettingreboot == y ]]; then
+   sudo reboot
+fi
+

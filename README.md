@@ -1,23 +1,13 @@
-### Harden Ubuntu Desktop 20
-### Harden CentOS 8
+### Harden Ubuntu Desktop
+### Harden CentOS
 
-**Instruction**
+**Run**
 
-*Ubuntu*
 
 ```
 git clone https://github.com/dophanngoc/enhance_linux.git
 sudo bash optimize
 ```
-
-*CentOS*
-
-```
-git clone https://github.com/dophanngoc/enhance_linux.git
-git checkout centos
-sudo bash optimize
-```
-
 
 
 
@@ -30,7 +20,8 @@ Run `sudo bash optimize`
 
 `sudo iftop -i <if-name>`
 
-- Monitor traffic per app
+- Monitor traffic per service
 
 `sudo nethogs <if-name>`
- 
+
+Note: _the script is already tested on Ubuntu Desktop 20 LTS and CentOS 8 Stream_ 
